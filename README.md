@@ -1,1 +1,1 @@
-"# school project: lzw implementation MIPS assembly" 
+school project: lzw implementation MIPS assembly language
