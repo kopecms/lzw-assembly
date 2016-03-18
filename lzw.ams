@@ -1,0 +1,146 @@
+		.data
+
+buffer:		.space 6500
+file_name:	.asciiz "file.txt"
+space:		.asciiz " "
+text0:		.asciiz "Program kompresujacy i dekompreujacy algorytmem lzw\n"
+
+dict_addr:	.word 0		# adres slownika
+dict_current:	.word 0		# adres elementu ostatniego badz uzywanego
+
+iter_byte:	.byte 1		# zmienna do iteracji
+
+word_from_dict: .word 0		# adres slowa ze slownika
+
+ab:	.space 60		# zerzniete ze strony z algorytmem
+a:	.space 60
+b:	.byte 100
+
+# stringi do testow
+abc: 	.asciiz "a"
+abcd:	.asciiz ""
+
+		.text
+		.globl main
+		
+main:		la $a0, text0		# wypisz jakis tekst powitalny
+		li $v0, 4
+		syscall			
+		
+open_file:	la $a0, file_name	# wczytaj nazwe pliku
+		li $a1, 0		# otwieranie do czytania
+		li $a2, 0 		# jakies flagi
+		li $v0, 13		# tryb otwierania
+		syscall
+		move $s0, $v0		# zapisz uchwyt do pliku
+		
+read_file: 	move $a0, $s0		
+		la $a1, buffer		
+		li $a2, 6500		# dlugosc buffora
+		li $v0, 14		# tryb czytania
+		syscall
+		move $t0, $v0		# zapisz liczbe wczytanych bajtow
+
+build_dict:	li $a0, 8		# wszystko na razie hardcode
+		li $v0, 9
+		syscall
+		sw $v0, dict_addr	# piewszy element slownika
+		sw $v0, dict_current	# element ostani 
+				
+add_word_init:	lw $t0, iter_byte
+		lw $t1, dict_current
+		sb $t0, 4($t1)
+		sb $0, 5($t1)		# ustawiamy zero na koncu wyrazu
+		
+		li $a0, 8		# alokujemy nowa pamiec
+		li $v0, 9
+		syscall
+		sw $v0, 0($t1)		# zapisujemy adres kolejnej komorku
+		sw $v0, dict_current
+		
+		addi $t0,$t0,1
+		
+		sb $t0, iter_byte	# zwiekszamy
+		
+		blt $t0, 256, add_word_init # az slownik bedzie mial rozmiar 255
+		
+		la $t0, buffer		# ladujemy adres buffora
+		lb $t1, 0($t0)		# ladujemy pierwszy znak
+		sb $t1, b
+		
+compres:	beq $t1,$0, end		# jesli koniec pliku konczymy
+	
+		jal add_byte		# ab = a + b
+		jal if_ab_in_dict		# jesli w slowniuku
+
+if_ab_in_dict:	la $t1, dict_addr	# ladujemy slownik
+		lw $t1,0($t1)	
+		
+		la $a0, 4($t1)		# ladujemy string ze slownika do porownania z ab
+		
+		jal comper_strings
+		
+		la $a0,	0($v0)
+		li $v0, 1
+		syscall
+		j end
+		
+
+comper_strings: la $t1, word_from_dict 	# zwraca w $v0 1 jesli rowne lub 0 jesli nie
+		la $t2, ab		# ladujemy stringi
+		
+equal:		lb $t3, 0($t1)
+		lb $t4, 0($t2) 		# ladujemy po bicie
+		
+		addi $t1, $t1, 1
+		addi $t2, $t2, 1 	# przesuwamy miejsce w pamieci
+		beqz $t3, zero	
+		beqz $t4, not_equal
+		beq $t3,$t4, equal
+zero:		bnez $t4, not_equal	# seria szalonych warunkow
+		li $v0, 1
+		jr $ra
+not_equal:	li $v0, 0
+		jr $ra
+			
+	
+add_byte:	la $t2,	ab
+		la $t3, a
+		lb $t5, b
+		
+		lb $t4, 0($t3)		#zaladuj pierwszy bajt
+		
+add_a:		beq $t4, 0, add_b 
+		sb $t4, 0($t2)		# zapisz bajt z a w ab
+		addi $t2, $t2 ,1		# przesuwamy sie po byforze ab
+		addi $t3, $t3 ,1		# przesuwamy sie po buforze a
+		lb $t4, 0($t3)		# zaladuj kolejny bajt z a
+		bne $t4, 0, add_a 	# koniec stringa a	
+		
+add_b:		sb $t5, 0($t2) 		# dodaj b
+		sb $0, 1($t2)		# dodaj zero na koniec
+
+		jr $ra		
+
+
+
+		#p drukowanie sloqnika
+		la $t1, dict_addr
+		lw $t1,0($t1)
+		
+print_dict:	lw $a0,	4($t1) 
+		li $v0, 1
+		syscall
+		
+		la $a0,	space 
+		li $v0, 4
+		syscall
+		
+		lw $t1,0($t1)
+		lw $t2,0($t1)
+		beq $t2,0,end
+		j print_dict
+		
+		
+end:		li $v0, 10
+		syscall
